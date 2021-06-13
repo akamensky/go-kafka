@@ -3,7 +3,6 @@ package kafka
 import (
 	"context"
 	"github.com/Shopify/sarama"
-	"time"
 )
 
 type ConsumerOptions struct {
@@ -18,8 +17,8 @@ type Consumer interface {
 	Errors() <-chan error
 }
 
-func NewConsumer(opts *ConsumerOptions) (Consumer, error) {
-	return newConsumer(opts)
+func NewConsumer(opts *ConsumerOptions, config *sarama.Config) (Consumer, error) {
+	return newConsumer(opts, config)
 }
 
 type consumer struct {
@@ -28,16 +27,13 @@ type consumer struct {
 	errors <-chan error
 }
 
-func newConsumer(opts *ConsumerOptions) (*consumer, error) {
-	conf := sarama.NewConfig()
-	conf.Version = sarama.V2_3_0_0
-	conf.Consumer.Return.Errors = true
-	conf.Consumer.Offsets.AutoCommit.Enable = true
-	conf.Consumer.Offsets.AutoCommit.Interval = 100 * time.Millisecond
-	conf.Consumer.Offsets.Initial = sarama.OffsetOldest
-	conf.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategySticky
+func newConsumer(opts *ConsumerOptions, config *sarama.Config) (*consumer, error) {
+	err := config.Validate()
+	if err != nil {
+		return nil, err
+	}
 
-	group, err := sarama.NewConsumerGroup(opts.Brokers, opts.GroupName, conf)
+	group, err := sarama.NewConsumerGroup(opts.Brokers, opts.GroupName, config)
 	if err != nil {
 		return nil, err
 	}
@@ -48,10 +44,15 @@ func newConsumer(opts *ConsumerOptions) (*consumer, error) {
 		errors: group.Errors(),
 	}
 
-	err = group.Consume(context.Background(), []string{opts.Topic}, c)
-	if err != nil {
-		return nil, err
-	}
+	go func() {
+		ctx := context.Background()
+		for {
+			err = group.Consume(ctx, []string{opts.Topic}, c)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}()
 
 	return c, nil
 }

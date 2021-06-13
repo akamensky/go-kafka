@@ -15,8 +15,8 @@ type AsyncProducer interface {
 	Errors() <-chan error
 }
 
-func NewAsyncProducer(opts *ProducerOptions) (AsyncProducer, error) {
-	return newAsyncProducer(opts)
+func NewAsyncProducer(opts *ProducerOptions, config *sarama.Config) (AsyncProducer, error) {
+	return newAsyncProducer(opts, config)
 }
 
 type asyncProducer struct {
@@ -26,14 +26,13 @@ type asyncProducer struct {
 	errors   chan error
 }
 
-func newAsyncProducer(opts *ProducerOptions) (*asyncProducer, error) {
-	c := sarama.NewConfig()
-	c.Version = sarama.V2_3_0_0
-	c.Producer.Return.Errors = true
-	c.Producer.RequiredAcks = sarama.WaitForLocal
-	c.Producer.Compression = sarama.CompressionSnappy
+func newAsyncProducer(opts *ProducerOptions, config *sarama.Config) (*asyncProducer, error) {
+	err := config.Validate()
+	if err != nil {
+		return nil, err
+	}
 
-	p, err := sarama.NewAsyncProducer(opts.Brokers, c)
+	p, err := sarama.NewAsyncProducer(opts.Brokers, config)
 	if err != nil {
 		return nil, err
 	}
