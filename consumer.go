@@ -69,7 +69,12 @@ func (c *consumer) Errors() <-chan error {
 }
 
 func (c *consumer) Close() error {
-	return c.group.Close()
+	err := c.group.Close()
+	if err != nil {
+		return err
+	}
+	close(c.buffer)
+	return nil
 }
 
 func (c *consumer) Setup(sarama.ConsumerGroupSession) error {
