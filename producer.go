@@ -13,6 +13,7 @@ type ProducerOptions struct {
 type AsyncProducer interface {
 	Send(message *Message)
 	Errors() <-chan error
+	Close() error
 }
 
 func NewAsyncProducer(opts *ProducerOptions, config *sarama.Config) (AsyncProducer, error) {
@@ -59,6 +60,10 @@ func (p *asyncProducer) Send(message *Message) {
 
 func (p *asyncProducer) Errors() <-chan error {
 	return p.errors
+}
+
+func (p *asyncProducer) Close() error {
+	return p.producer.Close()
 }
 
 func (p *asyncProducer) loop() {

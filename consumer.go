@@ -15,6 +15,7 @@ type ConsumerOptions struct {
 type Consumer interface {
 	Receive() <-chan *Message
 	Errors() <-chan error
+	Close() error
 }
 
 func NewConsumer(opts *ConsumerOptions, config *sarama.Config) (Consumer, error) {
@@ -25,6 +26,7 @@ type consumer struct {
 	opts   *ConsumerOptions
 	buffer chan *Message
 	errors <-chan error
+	group  sarama.ConsumerGroup
 }
 
 func newConsumer(opts *ConsumerOptions, config *sarama.Config) (*consumer, error) {
@@ -42,6 +44,7 @@ func newConsumer(opts *ConsumerOptions, config *sarama.Config) (*consumer, error
 		opts:   opts,
 		buffer: make(chan *Message, opts.BufferSize),
 		errors: group.Errors(),
+		group:  group,
 	}
 
 	go func() {
@@ -63,6 +66,10 @@ func (c *consumer) Receive() <-chan *Message {
 
 func (c *consumer) Errors() <-chan error {
 	return c.errors
+}
+
+func (c *consumer) Close() error {
+	return c.group.Close()
 }
 
 func (c *consumer) Setup(sarama.ConsumerGroupSession) error {
