@@ -23,10 +23,11 @@ func NewConsumer(opts *ConsumerOptions, config *sarama.Config) (Consumer, error)
 }
 
 type consumer struct {
-	opts   *ConsumerOptions
-	buffer chan *Message
-	errors <-chan error
-	group  sarama.ConsumerGroup
+	opts       *ConsumerOptions
+	buffer     chan *Message
+	errors     <-chan error
+	group      sarama.ConsumerGroup
+	cancelFunc context.CancelFunc
 }
 
 func newConsumer(opts *ConsumerOptions, config *sarama.Config) (*consumer, error) {
@@ -40,18 +41,23 @@ func newConsumer(opts *ConsumerOptions, config *sarama.Config) (*consumer, error
 		return nil, err
 	}
 
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
 	c := &consumer{
-		opts:   opts,
-		buffer: make(chan *Message, opts.BufferSize),
-		errors: group.Errors(),
-		group:  group,
+		opts:       opts,
+		buffer:     make(chan *Message, opts.BufferSize),
+		errors:     group.Errors(),
+		group:      group,
+		cancelFunc: cancelFunc,
 	}
 
 	go func() {
-		ctx := context.Background()
 		for {
 			err = group.Consume(ctx, []string{opts.Topic}, c)
 			if err != nil {
+				if ctx.Err() != nil {
+					break
+				}
 				panic(err)
 			}
 		}
@@ -69,6 +75,7 @@ func (c *consumer) Errors() <-chan error {
 }
 
 func (c *consumer) Close() error {
+	c.cancelFunc()
 	err := c.group.Close()
 	if err != nil {
 		return err
